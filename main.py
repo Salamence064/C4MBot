@@ -4,6 +4,7 @@ from discord.ext import commands
 from random import randint
 
 
+# used to avoid the bot locking in on one random number
 def randomNumber(): return randint(0, 1)
 
 
@@ -29,6 +30,37 @@ async def help(ctx, arg=""):
 
 @bot.command()
 async def flip(ctx): await ctx.send("**heads**" if randomNumber() == 1 else "**tails**")
+
+@bot.command()
+async def c4(ctx, arg = "7x6"):
+    try:
+        index = arg.index('x')
+
+        width = int(arg[:index])
+        height = int(arg[index+1:])
+
+    except:
+        await ctx.send("Invalid format. Provide the board size as <width>x<height>")
+        return
+
+    if (width > 9 or height > 9):
+        await ctx.send("Board size is too large. The width and height must be between 2-9.")
+        return
+    
+    if (width < 2 or height < 2):
+        await ctx.send("Board size is too small. The width and height must be between 2-9.")
+        return
+    
+    # todo setup the async games
+
+    # setup numbers at the top
+    message = ":black_large_square: "
+    for i in range(width):  message += env[str(i)] + " "
+    message += "\n"
+
+    # empty board config
+    for i in range(height-1, -1, -1): message += env[str(i)] + " " + ":white_large_square: " * width + "\n"
+    await ctx.send(message)
 
 
 # run the bot
