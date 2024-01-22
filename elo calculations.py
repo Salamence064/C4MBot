@@ -4,8 +4,7 @@ START_ELO = 1000
 eloChangeFactor = 187 # how many half-points you gain per win
 eloDeviation = 600 # scales how much the difference in elo increases/decreases how many points you get
 
-
-playerEloDatabase = {}
+playerEloDatabase = {} # temporary until we use mongodb
 
 def createPlayer(name, elo=START_ELO): # adds name to database
     global playerEloDatabase
@@ -37,16 +36,3 @@ def returnLeaderboard() -> list: # given no input, returns [(player, elo), ..] s
         elos[loc] = 0 # cant be found again if its 0
         leaderboard.append((player, elo))
     return leaderboard
-
-
-
-
-    
-createPlayer("w")
-createPlayer("a")
-createPlayer("Miles", 1100)
-createPlayer("Radiant")
-simMatch("Miles", "Radiant", 1)
-simMatch("Miles", "Radiant", 1)
-
-returnLeaderboard()
