@@ -1,6 +1,5 @@
 from dotenv import dotenv_values
 import discord
-import asyncio
 from discord.ext import commands
 from random import randint
 
@@ -20,9 +19,6 @@ intents.message_content = True
 
 # setup bot
 bot = commands.Bot(command_prefix="-", intents=intents, help_command=None)
-
-
-
 
 
 # commands
@@ -57,8 +53,6 @@ async def c4(ctx, arg = "7x6"):
         await ctx.send("Board size is too small. The width and height must be between 2-9.")
         return
     
-    # todo setup the async games
-
     # track if this instance of the game is still running
     gameRunning = True
 
