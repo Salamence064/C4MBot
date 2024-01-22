@@ -1,5 +1,6 @@
 from dotenv import dotenv_values
 import discord
+import asyncio
 from discord.ext import commands
 from random import randint
 
@@ -12,10 +13,12 @@ def randomNumber(): return randint(0, 1)
 env = dotenv_values(".env") # will give us a dictionary with all values from .env
 
 
-# initialize the bot
+# initialize the intents
 intents = discord.Intents.default()
 intents.message_content = True
 
+
+# setup bot
 bot = commands.Bot(command_prefix="-", intents=intents, help_command=None)
 
 
@@ -53,6 +56,9 @@ async def c4(ctx, arg = "7x6"):
     
     # todo setup the async games
 
+    # track if this instance of the game is still running
+    gameRunning = True
+
     # setup numbers at the top
     message = ":black_large_square: "
     for i in range(width):  message += env[str(i)] + " "
@@ -61,6 +67,23 @@ async def c4(ctx, arg = "7x6"):
     # empty board config
     for i in range(height-1, -1, -1): message += env[str(i)] + " " + ":white_large_square: " * width + "\n"
     await ctx.send(message)
+    
+    while gameRunning:
+        msg = await bot.wait_for('message', check=None, timeout=300)
+
+        # ensure the input is a valid column
+        try:
+            mv = int(msg.content)
+
+            if mv < 1 or mv > width:
+                await ctx.send("Invalid move.")
+                continue
+
+            await ctx.send(":blue_circle:")
+
+        except:
+            gameRunning = False
+            await ctx.send("Game complete.")
 
 
 # run the bot
