@@ -49,6 +49,17 @@ async def help(ctx, arg=""):
 async def flip(ctx): await ctx.send("**heads**" if randomNumber() == 1 else "**tails**")
 
 @bot.command()
+async def series(ctx):
+    playera = ctx.author
+    await ctx.send(playera.mention + " has started a series. Type '-joinseries' to join")
+    try:
+        msg = await bot.wait_for('message', check=lambda msg: msg.content == "-joinseries" and msg.author != playera, timeout=3)
+    except asyncio.TimeoutError:
+        await ctx.send("The series timed out")
+    playerb = msg.author
+    await ctx.send(playerb.mention + " has joined the series, now starting")
+
+@bot.command()
 async def c4(ctx, arg = "7x6"):
     try:
         index = arg.index('x')
