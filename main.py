@@ -1,11 +1,26 @@
+# I hate Python (C++ >>>)
+
 from dotenv import dotenv_values
 import discord
+import asyncio
 from discord.ext import commands
 from random import randint
 
 
 # used to avoid the bot locking in on one random number
 def randomNumber(): return randint(0, 1)
+
+
+# convert a double list to a string
+def printBoard(board, offset):
+    message = ""
+    
+    for i in range(len(board)):
+        message += board[i]
+        if (i%offset == 7): message += "\n"
+        else: message += " "
+
+    return message
 
 
 # import token from .env file
@@ -55,6 +70,7 @@ async def c4(ctx, arg = "7x6"):
     
     # track if this instance of the game is still running
     gameRunning = True
+    turn = True # True = P1, False = P2
 
     # setup numbers at the top
     message = ":black_large_square: "
@@ -64,9 +80,17 @@ async def c4(ctx, arg = "7x6"):
     # empty board config
     for i in range(height-1, -1, -1): message += env[str(i)] + " " + ":white_large_square: " * width + "\n"
     await ctx.send(message)
+
+    # gameboard used for display
+    board = message.split()
+
+    # setup for quicker move making
+    c = width + 1
+    bottomCell = [height*c + i for i in range(0, c)]
     
     while gameRunning:
-        msg = await bot.wait_for('message', check=None, timeout=300)
+        try: msg = await bot.wait_for('message', check=None, timeout=300)
+        except asyncio.TimeoutError: return await ctx.send("Game timed out.")
 
         # ensure the input is a valid column
         try:
@@ -76,7 +100,14 @@ async def c4(ctx, arg = "7x6"):
                 await ctx.send("Invalid move.")
                 continue
 
-            await ctx.send(":blue_circle:")
+            if bottomCell[mv] < c:
+                await ctx.send("Full column.")
+                continue
+
+            board[bottomCell[mv]] = ":blue_circle:" if turn else ":red_circle:"
+            bottomCell[mv] -= c
+            turn = not turn
+            await ctx.send(printBoard(board, width+1))
 
         except:
             gameRunning = False
