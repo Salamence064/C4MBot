@@ -22,6 +22,9 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="-", intents=intents, help_command=None)
 
 
+
+
+
 # commands
 @bot.command()
 async def help(ctx, arg=""):
