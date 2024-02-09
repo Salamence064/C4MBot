@@ -1,3 +1,6 @@
 .env
 .DS_Store
 .vscode/
+connect4.db
+dbTest.py
+__pycache__/
