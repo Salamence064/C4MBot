@@ -1,11 +1,14 @@
 # I hate Python (C++ >>>)
 # yor mother (real)
 
-from dotenv import dotenv_values
 import discord
 import asyncio
+import sqlite3
+
+from dotenv import dotenv_values
 from discord.ext import commands
 from random import randint
+
 from bitboards import checkwin, makemoves, generateMasks
 
 activeGamePlayers = [] # [(player,channel),(player,channel)]
@@ -83,25 +86,109 @@ async def flip(ctx): await ctx.send("**heads**" if randint(0, 1) == 1 else "**ta
 @bot.command()
 async def display(ctx, *arguments):
     arguments = " ".join(arguments)
+
     try:
-        if "x" in arguments: # determine whether they specified board size or not
-            boardSize, moves = arguments.split()
-        else:
-            boardSize, moves = "7x6", arguments
+        # determine whether they specified board size or not
+        if "x" in arguments: boardSize, moves = arguments.split()
+        else: boardSize, moves = "7x6", arguments
+
         moves = [int(move) for move in moves]
+        
     except:
         await ctx.send("Invalid input. Syntax: '-display <board size> <move notation>'")
+
     await ctx.send(boardSize)
     await ctx.send(moves)
+
+
+@bot.command()
+async def createpuzzle(ctx, *arguments):
+    author = ctx.author.name
+
+    # todo will later streamline this so the bot prompts for these things and determines the elo and difficulty itself (if possible?)
+    # todo if not possible, we can have it manually entered and it can be overridden by us
+    # todo for now this is just for testing
+    # todo will also allow for the creation of multi-move puzzles
+
+    '''
+    Difficulty Legend:
+    0 - Newbie
+    1 - Beginner
+    2 - Rookie
+    3 - Novice
+    4 - Intermediate
+    5 - Proficient
+    6 - Advanced
+    7 - Expert
+    8 - Champion
+    9 - Impossible
+    10 - Nod Puzzle
+    '''
+
+    line = ""
+    difficulty = -1
+    elo = -1
+    solution = -1 # always go 7!!!
+
+    try:
+        for arg in arguments:
+
+            if (arg.startswith("line:")):
+                line = arg[5:]
+                
+            elif (arg.startswith("difficulty:")):
+                difficulty = int(arg[11:])
+
+            elif (arg.startswith("elo:")):
+                elo = int(arg[4:])
+
+            elif (arg.startswith("solution:")):
+                solution = int(arg[9:])
+
+            else:
+                raise Exception
+
+    except:
+        await ctx.send(f"Invalid argument. Unrecgonized token: '{arg}'")
+        return
+    
+    # add the puzzle to the db
+    con = sqlite3.connect('connect4.db')
+    cur = con.cursor()
+
+    values = [line, elo, difficulty, solution, '7x6', author]
+    cur.execute("INSERT INTO Puzzles VALUES (?,?,?,?,?,?)", values)
+
+    con.commit()
+    con.close()
+
+    await ctx.send("Puzzle successfully added.")
+
+@bot.command()
+async def playpuzzle(ctx, arg):
+    # todo currently also set up for debugging stuff
+    # ! for debugging a line will be passed in and it will simply display that puzzle to the screen
+    
+    # query the puzzle from the db
+    con = sqlite3.connect('connect4.db')
+    cur = con.cursor()
+
+    try: cur.execute('SELECT * FROM Puzzles WHERE Line=?', (arg,))
+    except: await ctx.send(f"Line '{arg}' is not an existing puzzle."); return
+
+    await ctx.send(cur.fetchone())
+    con.close()
 
 @bot.command()
 async def series(ctx):
     playera = ctx.author
     await ctx.send(playera.mention + " has started a series. Type '-joinseries' to join")
+
     try:
         msg = await bot.wait_for('message', check=lambda msg: msg.content == "-joinseries" and msg.author != playera, timeout=300)
     except asyncio.TimeoutError:
         await ctx.send("The series timed out")
+
     playerb = msg.author
     await ctx.send(playerb.mention + " has joined the series, now starting")
 
@@ -114,6 +201,7 @@ async def start(ctx, *flags):
     if (ctx.author, ctx.channel) in activeGamePlayers:
         await ctx.send(ctx.author.mention + " is already playing a game in this channel!")
         gameRunning = False
+
     else:
         activeGamePlayers.append((ctx.author, ctx.channel))
         gameRunning = True
@@ -123,6 +211,7 @@ async def start(ctx, *flags):
     width, height = 7, 6
     wincondition = 4
     blindfolded = False
+
     try:
         for flag in flags:
             currentflag = flag
@@ -143,8 +232,6 @@ async def start(ctx, *flags):
             else:
                 raise Exception
 
-
-
     except:
         await ctx.send(f"Invalid flag format. Issue here → `{currentflag}`")
         activeGamePlayers.remove((ctx.author, ctx.channel))
@@ -160,19 +247,24 @@ async def start(ctx, *flags):
             try:
                 msg = await bot.wait_for('message', check=None, timeout=300)
                 player2 = msg.author
+
             except asyncio.TimeoutError:
                 await ctx.send("The game timed out")
                 activeGamePlayers.remove((ctx.author, ctx.channel))
                 gameRunning = False
                 break
+
             if msg.channel != ctx.channel: continue
+
             if msg.content == "-quit":
                 gameRunning = False
                 activeGamePlayers.remove((player1, ctx.channel))
                 await ctx.send(player2.mention + " quit the game")
                 break
+
             if msg.content != "-join": # ignore any messages that arent joining
                 continue
+
             if (msg.author, msg.channel) in activeGamePlayers:
                 await ctx.send(player2.mention + " is already playing a game")
                 continue
@@ -184,8 +276,10 @@ async def start(ctx, *flags):
             board = [[":white_large_square:"]*width for i in range(height)]
             bottomCell = [height-1 for cols in range(width)]
             moves = ""
+
             if blindfolded:
                 board = 0
+                
             await ctx.send(getBoardMessage(board, player1.mention, player2.mention, turn))
             break
     
