@@ -74,21 +74,15 @@ def getBoardMessage(board, p1_ping, p2_ping, turn):
     return message
 
 # Note: player should be either 1 or 2
-def getPuzzleEmbed(board: list[list[str]], elo: int, difficulty: int, author: str, player: int, title: str):
-    message = f"## Difficulty: {diffAdjectives[difficulty]}\nElo: {elo}\n\n:red_square:"
+def getPuzzleMessage(board: list[list[str]], elo: int, difficulty: int, author: str, player: int, title: str):
+    message = f"# {title}\n**Difficulty: {diffAdjectives[difficulty]}**\nElo: {elo}\n{'Blue' if player == 1 else 'Red'} (P{player}) to play\n\n"
+
     rows, cols = len(board), len(board[0])
-    message += " ".join([env[str(num)] for num in range(cols)]) + "\n"
+    message += ":purple_square:" + " ".join([env[str(num)] for num in range(cols)]) + "\n"
     
     for r in range(rows): message += env[str(rows - r - 1)] + " ".join(board[r]) + "\n"
 
-    message += f"\n###### By {author}"
-
-    embed=(discord.Embed(title=title,  color=0xE10101)
-                .add_field(name="-help", value="Get information on a command.", inline=False)
-                .add_field(name="-flip", value="Flip a coin.", inline=False)
-                .set_footer(text="For more information on each command use -help [command]"))
-
-    return embed
+    return message + f"\nBy {author}"
 
 def isWinCondition(moves, turn, width, height, wincondition):
     masks = generateMasks(width, height, wincondition)
@@ -177,6 +171,7 @@ async def createpuzzle(ctx, *arguments):
     '''
 
     line = ""
+    title = ""
     difficulty = -1
     elo = -1
     solution = -1 # always go 7!!!
@@ -196,6 +191,9 @@ async def createpuzzle(ctx, *arguments):
             elif (arg.startswith("solution:")):
                 solution = int(arg[9:])
 
+            elif (arg.startswith("title:")):
+                title = arg[6:]
+
             else:
                 raise Exception
 
@@ -207,8 +205,8 @@ async def createpuzzle(ctx, *arguments):
     con = sqlite3.connect('connect4.db')
     cur = con.cursor()
 
-    values = [line, elo, difficulty, solution, '7x6', author]
-    cur.execute("INSERT INTO Puzzles VALUES (?,?,?,?,?,?)", values)
+    values = [line, elo, difficulty, solution, '7x6', author, title]
+    cur.execute("INSERT INTO Puzzles VALUES (?,?,?,?,?,?,?)", values)
 
     con.commit()
     con.close()
@@ -233,7 +231,7 @@ async def playpuzzle(ctx, arg):
     board = getBoard(arg, values[4])
     solution = values[3]
 
-    await ctx.send(embed=getPuzzleEmbed(board, values[1], values[2], values[5], (len(arg)&1) + 1))
+    await ctx.send(getPuzzleMessage(board, values[1], values[2], values[5], (len(arg)&1) + 1, values[6]))
 
 
 # * =====================
