@@ -11,46 +11,84 @@ from random import randint
 
 from bitboards import checkwin, makemoves, generateMasks
 
+diffAdjectives = ['Newbie', 'Beginner', 'Rookie', 'Novice', 'Intermediate', 'Proficient', 
+                  'Advanced', 'Expert', 'Champion', 'Impossible', 'Nod Puzzle']
 activeGamePlayers = [] # [(player,channel),(player,channel)]
+
 
 # returns board (2d list) after sequence of moves (str like '432')
 def getBoard(moves: str, boardSize="7x6"):
-    moveList = []
-    moveList.extend(moves)
     try:
         index = boardSize.index('x')
         width = int(boardSize[:index])
         height = int(boardSize[index+1:])
 
     except: return "Invalid format. Provide the board size as <width>x<height>"
+
     if (width > 9 or height > 9): return "Board size is too large. The width and height must be between 2-9"
     if (width < 2 or height < 2): return "Board size is too small. The width and height must be between 2-9"
 
-    uniqueMoves = set(moveList)
+    uniqueMoves = set(moves)
     for move in uniqueMoves:
-        if moveList.count(move) >= height:
+        if moves.count(move) >= height:
             return f"Invalid input. Too many moves in column {move}"
+        
+        iMove = int(move)
+        if iMove > width or iMove < 1:
+            return f"Invalid input. Move string contains invalid column '{iMove}'"
 
     board = [[":white_large_square:"]*width for i in range(height)]
     bottomCell = [height-1 for cols in range(width)]
-    
+    turn = True
+
+    for move in moves:
+        # update the board
+        iMove = int(move) - 1
+        board[bottomCell[iMove]][iMove] = ":blue_circle:" if turn else ":red_circle:"
+
+        # update for next iteration
+        bottomCell[iMove] -= 1
+        turn = not turn
+
+    return board
+
+
 # return discord-formatted message
 def getBoardMessage(board, p1_ping, p2_ping, turn):
     message = ""
+
     if board != 0:
-        message += ":white_large_square:"
+        message += ":white_large_square:" # todo update to match puzzle board
         numRows, numColumns = len(board), len(board[0])
-        message += " ".join([env[str(num)] for num in range(numColumns)])
-        message += "\n"
+        message += " ".join([env[str(num)] for num in range(numColumns)]) + "\n"
+
         for rowIndex, row in enumerate(board):
             rowNum = str(numRows - rowIndex - 1)
-            text = env[rowNum] + " ".join(row) + "\n"
-            message += text
+            message += env[rowNum] + " ".join(row) + "\n"
+
     p1_ping, p2_ping = "Player 1: " + p1_ping, "Player 2: " + p2_ping
     if turn: p1_ping += " ←"
     else: p2_ping += " ←"
+
     message += f"{p1_ping}\n{p2_ping}"
     return message
+
+# Note: player should be either 1 or 2
+def getPuzzleEmbed(board: list[list[str]], elo: int, difficulty: int, author: str, player: int, title: str):
+    message = f"## Difficulty: {diffAdjectives[difficulty]}\nElo: {elo}\n\n:red_square:"
+    rows, cols = len(board), len(board[0])
+    message += " ".join([env[str(num)] for num in range(cols)]) + "\n"
+    
+    for r in range(rows): message += env[str(rows - r - 1)] + " ".join(board[r]) + "\n"
+
+    message += f"\n###### By {author}"
+
+    embed=(discord.Embed(title=title,  color=0xE10101)
+                .add_field(name="-help", value="Get information on a command.", inline=False)
+                .add_field(name="-flip", value="Flip a coin.", inline=False)
+                .set_footer(text="For more information on each command use -help [command]"))
+
+    return embed
 
 def isWinCondition(moves, turn, width, height, wincondition):
     masks = generateMasks(width, height, wincondition)
@@ -60,6 +98,7 @@ def isWinCondition(moves, turn, width, height, wincondition):
 
     result = checkwin(bitboard, width, height, wincondition, masks)
     return result
+
 
 # import token from .env file
 env = dotenv_values(".env")
@@ -71,7 +110,13 @@ intents.message_content = True
 # setup bot
 bot = commands.Bot(command_prefix="-", intents=intents, help_command=None)
 
+
 # commands
+
+# * ====================
+# * Utility Commands
+# * ====================
+
 @bot.command()
 async def help(ctx, arg=""):
     embed=(discord.Embed(title="__List of Commands__",  color=0xE10101)
@@ -101,9 +146,15 @@ async def display(ctx, *arguments):
     await ctx.send(moves)
 
 
+# * ===================
+# * Puzzle Commands
+# * ===================
+    
 @bot.command()
 async def createpuzzle(ctx, *arguments):
-    author = ctx.author.name
+    author = ctx.author.display_name
+
+    # todo go through and add title related stuff
 
     # todo will later streamline this so the bot prompts for these things and determines the elo and difficulty itself (if possible?)
     # todo if not possible, we can have it manually entered and it can be overridden by us
@@ -176,8 +227,18 @@ async def playpuzzle(ctx, arg):
     try: cur.execute('SELECT * FROM Puzzles WHERE Line=?', (arg,))
     except: await ctx.send(f"Line '{arg}' is not an existing puzzle."); return
 
-    await ctx.send(cur.fetchone())
+    values = cur.fetchone() # retrieve the values from the query
     con.close()
+
+    board = getBoard(arg, values[4])
+    solution = values[3]
+
+    await ctx.send(embed=getPuzzleEmbed(board, values[1], values[2], values[5], (len(arg)&1) + 1))
+
+
+# * =====================
+# * Gameplay Commands
+# * =====================
 
 @bot.command()
 async def series(ctx):
@@ -290,6 +351,7 @@ async def start(ctx, *flags):
             activeGamePlayers.remove((player1, ctx.channel))
             activeGamePlayers.remove((player2, ctx.channel))
             return await ctx.send("Game timed out.")
+        
         if msg.channel != ctx.channel:
             continue
 
