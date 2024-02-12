@@ -74,8 +74,8 @@ def getBoardMessage(board, p1_ping, p2_ping, turn):
     return message
 
 # Note: player should be either 1 or 2
-def getPuzzleMessage(board: list[list[str]], elo: int, difficulty: int, author: str, player: int, title: str):
-    message = f"# {title}\n**Difficulty: {diffAdjectives[difficulty]}**\nElo: {elo}\n{'Blue' if player == 1 else 'Red'} (P{player}) to play\n\n"
+def getPuzzleMessage(board: list[list[str]], elo: int, difficulty: int, author: str, player: int):
+    message = f"# Puzzle\n**Difficulty: {diffAdjectives[difficulty]}**\nElo: {elo}\n{'Blue' if player == 1 else 'Red'} (P{player}) to play\n\n"
 
     rows, cols = len(board), len(board[0])
     message += ":purple_square:" + " ".join([env[str(num)] for num in range(cols)]) + "\n"
@@ -145,7 +145,7 @@ async def display(ctx, *arguments):
 # * ===================
     
 @bot.command()
-async def createpuzzle(ctx, *arguments):
+async def np(ctx, *arguments):
     author = ctx.author.display_name
 
     # todo go through and add title related stuff
@@ -171,7 +171,6 @@ async def createpuzzle(ctx, *arguments):
     '''
 
     line = ""
-    title = ""
     difficulty = -1
     elo = -1
     solution = -1 # always go 7!!!
@@ -191,9 +190,6 @@ async def createpuzzle(ctx, *arguments):
             elif (arg.startswith("solution:")):
                 solution = int(arg[9:])
 
-            elif (arg.startswith("title:")):
-                title = arg[6:]
-
             else:
                 raise Exception
 
@@ -205,8 +201,8 @@ async def createpuzzle(ctx, *arguments):
     con = sqlite3.connect('connect4.db')
     cur = con.cursor()
 
-    values = [line, elo, difficulty, solution, '7x6', author, title]
-    cur.execute("INSERT INTO Puzzles VALUES (?,?,?,?,?,?,?)", values)
+    values = [line, elo, difficulty, solution, '7x6', author]
+    cur.execute("INSERT INTO Puzzles VALUES (?,?,?,?,?,?)", values)
 
     con.commit()
     con.close()
@@ -214,7 +210,7 @@ async def createpuzzle(ctx, *arguments):
     await ctx.send("Puzzle successfully added.")
 
 @bot.command()
-async def playpuzzle(ctx, arg):
+async def p(ctx, arg):
     # todo currently also set up for debugging stuff
     # ! for debugging a line will be passed in and it will simply display that puzzle to the screen
     
@@ -231,7 +227,32 @@ async def playpuzzle(ctx, arg):
     board = getBoard(arg, values[4])
     solution = values[3]
 
-    await ctx.send(getPuzzleMessage(board, values[1], values[2], values[5], (len(arg)&1) + 1, values[6]))
+    await ctx.send(getPuzzleMessage(board, values[1], values[2], values[5], (len(arg)&1) + 1))
+
+    try:
+        while True:
+            msg = await bot.wait_for('message', check=None, timeout=600)
+
+            try:
+                m = int(msg.content)
+
+                if (m < 1 or m > len(board[0])): print("yor"); raise Exception # ensure valid move
+
+                # check if they got the puzzle right
+                if (m == solution):
+                    await ctx.send("Correct! https://media.discordapp.net/attachments/1114220604275560572/1206397046307823667/yor7.png?ex=65dbdbcd&is=65c966cd&hm=1d63c26082888b73120ce5ae79551400338e20a073068b4eea93a57b457b082e&=&format=webp&quality=lossless&width=411&height=580")
+                    return
+                
+                else:
+                    await ctx.send("Incorrect.")
+                    return
+
+            except:
+                await ctx.send(f"Invalid input. Please enter a move between 1 and {len(board[0])}.")
+
+
+    except asyncio.TimeoutError:
+        await ctx.send("Timed out.")
 
 
 # * =====================
