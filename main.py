@@ -9,6 +9,7 @@ from dotenv import dotenv_values
 from discord.ext import commands
 from random import randint
 
+import puzzleElo
 from bitboards import checkwin, makemoves, generateMasks
 
 diffAdjectives = ['Newbie', 'Beginner', 'Rookie', 'Novice', 'Intermediate', 'Proficient', 
@@ -30,7 +31,7 @@ def getBoard(moves: str, boardSize="7x6"):
 
     uniqueMoves = set(moves)
     for move in uniqueMoves:
-        if moves.count(move) >= height:
+        if moves.count(move) > height:
             return f"Invalid input. Too many moves in column {move}"
         
         iMove = int(move)
@@ -50,6 +51,7 @@ def getBoard(moves: str, boardSize="7x6"):
         bottomCell[iMove] -= 1
         turn = not turn
 
+    # print(board)
     return board
 
 
@@ -58,7 +60,7 @@ def getBoardMessage(board, p1_ping, p2_ping, turn):
     message = ""
 
     if board != 0:
-        message += ":white_large_square:" # todo update to match puzzle board
+        message += ":purple_square:"
         numRows, numColumns = len(board), len(board[0])
         message += " ".join([env[str(num)] for num in range(numColumns)]) + "\n"
 
@@ -79,7 +81,7 @@ def getPuzzleMessage(board: list[list[str]], elo: int, difficulty: int, author: 
 
     rows, cols = len(board), len(board[0])
     message += ":purple_square:" + " ".join([env[str(num)] for num in range(cols)]) + "\n"
-    
+
     for r in range(rows): message += env[str(rows - r - 1)] + " ".join(board[r]) + "\n"
 
     return message + f"\nBy {author}"
@@ -178,20 +180,12 @@ async def np(ctx, *arguments):
     try:
         for arg in arguments:
 
-            if (arg.startswith("line:")):
-                line = arg[5:]
-                
-            elif (arg.startswith("difficulty:")):
-                difficulty = int(arg[11:])
-
-            elif (arg.startswith("elo:")):
-                elo = int(arg[4:])
-
-            elif (arg.startswith("solution:")):
-                solution = int(arg[9:])
-
-            else:
-                raise Exception
+            if (arg.startswith("l:")): line = arg[2:]              # line
+            elif (arg.startswith("d:")): difficulty = int(arg[2:]) # difficulty
+            elif (arg.startswith("e:")): elo = int(arg[2:])        # elo
+            elif (arg.startswith("s:")): solution = int(arg[2:])   # solution
+            elif (arg.startswith("a:")): author = arg[2:]          # author (optional)
+            else: raise Exception
 
     except:
         await ctx.send(f"Invalid argument. Unrecgonized token: '{arg}'")
@@ -209,8 +203,15 @@ async def np(ctx, *arguments):
 
     await ctx.send("Puzzle successfully added.")
 
+
+# todo for next time:
+    # use the puzzleElo calculations from puzzleElo.py to update elo after a puzzle
+    # get a random puzzle within a reasonable range (+- 100 elo or so)
+
+# todo for next time:
+    # update the elo of the puzzle itself, too
 @bot.command()
-async def p(ctx, arg):
+async def p(ctx, arg=""):
     # todo currently also set up for debugging stuff
     # ! for debugging a line will be passed in and it will simply display that puzzle to the screen
     
@@ -218,13 +219,31 @@ async def p(ctx, arg):
     con = sqlite3.connect('connect4.db')
     cur = con.cursor()
 
-    try: cur.execute('SELECT * FROM Puzzles WHERE Line=?', (arg,))
-    except: await ctx.send(f"Line '{arg}' is not an existing puzzle."); return
+    # get the user
+    try: cur.execute('SELECT * FROM Players WHERE id=?', (ctx.author.id,))
+    except: return await ctx.send(f"User '{ctx.author.name}' could not be found.")
+    vals = cur.fetchone()
+    currElo = vals[2]
+
+    if (arg): # pick the specified line
+        try:
+            cur.execute('SELECT * FROM Puzzles WHERE Line=?', (arg,))
+
+        except:
+            con.close()
+            return await ctx.send(f"Line '{arg}' is not an existing puzzle.")
+
+    else: # pick a line near the user's elo
+        try:
+            cur.execute('SELECT * FROM Puzzles WHERE elo BETWEEN ? AND ?', (currElo-100, currElo+100))
+
+        except: 
+            con.close()
+            return await ctx.send(f"Could not find a line within your elo range.")
 
     values = cur.fetchone() # retrieve the values from the query
-    con.close()
 
-    board = getBoard(arg, values[4])
+    board = getBoard(values[0], values[4])
     solution = values[3]
 
     await ctx.send(getPuzzleMessage(board, values[1], values[2], values[5], (len(arg)&1) + 1))
@@ -236,15 +255,45 @@ async def p(ctx, arg):
             try:
                 m = int(msg.content)
 
-                if (m < 1 or m > len(board[0])): print("yor"); raise Exception # ensure valid move
+                if (m < 1 or m > len(board[0])): raise Exception # ensure valid move
 
                 # check if they got the puzzle right
                 if (m == solution):
                     await ctx.send("Correct! https://media.discordapp.net/attachments/1114220604275560572/1206397046307823667/yor7.png?ex=65dbdbcd&is=65c966cd&hm=1d63c26082888b73120ce5ae79551400338e20a073068b4eea93a57b457b082e&=&format=webp&quality=lossless&width=411&height=580")
+                    
+                    # compute the new elo
+                    newElo = puzzleElo.simPuzzle(currElo, values[1], 1)
+                    await ctx.send(f"You gained {newElo - currElo} Elo!")
+
+                    print(newElo)
+
+                    # update the db
+                    cur.execute('UPDATE Players SET PuzzleElo=? WHERE id=?', (newElo, ctx.author.id))
+                    con.commit()
+                    con.close()
+
+                    # query the db for debugging
+                    con = sqlite3.connect('connect4.db')
+                    cur = con.cursor()
+
+                    cur.execute('SELECT * FROM Players WHERE id=?', (ctx.author.id,))
+                    v = cur.fetchone()
+                    print(v[2])
+                    con.close()
+
                     return
                 
                 else:
-                    await ctx.send("Incorrect.")
+                    await ctx.send("Incorrect. No Yor picture for you.")
+
+                    # compute the new elo
+                    newElo = puzzleElo.simPuzzle(currElo, values[1], 0)
+                    await ctx.send(f"You lost {currElo - newElo} Elo.")
+
+                    # update the db
+                    cur.execute('UPDATE Players SET PuzzleElo=? WHERE id=?', (newElo, ctx.author.id))
+                    con.close()
+
                     return
 
             except:
@@ -252,6 +301,7 @@ async def p(ctx, arg):
 
 
     except asyncio.TimeoutError:
+        con.close()
         await ctx.send("Timed out.")
 
 

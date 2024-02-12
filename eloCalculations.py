@@ -1,4 +1,3 @@
-
 START_ELO = 1000
 
 eloChangeFactor = 187 # how many half-points you gain per win
@@ -11,17 +10,24 @@ def createPlayer(name, elo=START_ELO): # adds name to database
     playerEloDatabase.update({name:elo})
 
 def simMatch(name1, name2, result: float) -> None: # updates elo database. "result" =1 if name1 wins, =0 if name2 wins, =0.5 if draw
-    elo1, elo2 = map(lambda x: playerEloDatabase[x], [name1, name2])
-    chanceOfWinning1 = 1/(1+10**((elo2-elo1)/eloDeviation))
-    chanceOfWinning2 = 1-chanceOfWinning1
+    elo1, elo2 = map(lambda x: playerEloDatabase[x], [name1, name2]) # todo this is also redundant
+    chanceOfWinning1 = 1/(1+10**((elo2-elo1)/eloDeviation)) # todo this could be put directly in the elo change statement
     eloChange = eloChangeFactor*(result-chanceOfWinning1)
     playerEloDatabase[name1] = elo1 + eloChange
     playerEloDatabase[name2] = elo2 - eloChange
 
-def oddsOfWinning(name1, name2) -> float: # odds that name1 wins from 0 to 1
-    elo1, elo2 = map(lambda x: playerEloDatabase[x], [name1, name2])
-    chanceOfWinning1 = 1/(1+10**((elo2-elo1)/eloDeviation))
-    return(chanceOfWinning1)
+def oddsOfWinning(name1: str, name2: str) -> float:
+    """Calculate the probability name1 beats name2 based on their elos.
+
+    Args:
+        name1 (str): The name of the first player
+        name2 (str): The name of the second player
+
+    Returns:
+        float: odds that name1 wins from 0 to 1
+    """
+    
+    return 1/(1+10**((playerEloDatabase[name2]-playerEloDatabase[name1])/eloDeviation))
 
 def returnLeaderboard() -> list: # given no input, returns [(player, elo), ..] sorted descending by rank
     players = list(playerEloDatabase.keys())
