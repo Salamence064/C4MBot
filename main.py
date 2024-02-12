@@ -1,5 +1,6 @@
 # I hate Python (C++ >>>)
 # yor mother (real)
+# what shows u currently watching? me: solo leveling
 
 import discord
 import asyncio
@@ -30,6 +31,7 @@ def getBoard(moves: str, boardSize="7x6"):
     if (width < 2 or height < 2): return "Board size is too small. The width and height must be between 2-9"
 
     uniqueMoves = set(moves)
+    '''
     for move in uniqueMoves:
         if moves.count(move) > height:
             return f"Invalid input. Too many moves in column {move}"
@@ -37,7 +39,7 @@ def getBoard(moves: str, boardSize="7x6"):
         iMove = int(move)
         if iMove > width or iMove < 1:
             return f"Invalid input. Move string contains invalid column '{iMove}'"
-
+    '''
     board = [[":white_large_square:"]*width for i in range(height)]
     bottomCell = [height-1 for cols in range(width)]
     turn = True
@@ -56,23 +58,24 @@ def getBoard(moves: str, boardSize="7x6"):
 
 
 # return discord-formatted message
-def getBoardMessage(board, p1_ping, p2_ping, turn):
-    message = ""
+def getBoardMessage(board, p1, p2, turn):
+    p = p1 if turn else p2
+    message = p.mention + " It's your turn to play!\n"
 
     if board != 0:
         message += ":purple_square:"
         numRows, numColumns = len(board), len(board[0])
-        message += " ".join([env[str(num)] for num in range(numColumns)]) + "\n"
+        message += " " + " ".join([env[str(num)] for num in range(numColumns)]) + "\n"
 
         for rowIndex, row in enumerate(board):
             rowNum = str(numRows - rowIndex - 1)
-            message += env[rowNum] + " ".join(row) + "\n"
+            message += env[rowNum] + " " + " ".join(row) + "\n"
 
-    p1_ping, p2_ping = "Player 1: " + p1_ping, "Player 2: " + p2_ping
-    if turn: p1_ping += " ←"
-    else: p2_ping += " ←"
+    p1, p2 = "Player 1: " + p1.global_name, "Player 2: " + p2.global_name
+    if turn: p1 += " ←"
+    else: p2 += " ←"
 
-    message += f"{p1_ping}\n{p2_ping}"
+    message += f"{p1}\n{p2}"
     return message
 
 # Note: player should be either 1 or 2
@@ -106,8 +109,6 @@ intents.message_content = True
 # setup bot
 bot = commands.Bot(command_prefix="-", intents=intents, help_command=None)
 
-
-# commands
 
 # * ====================
 # * Utility Commands
@@ -337,10 +338,18 @@ async def start(ctx, *flags):
         gameRunning = True
         turn = True # True = P1, False = P2
 
+
+
     # flags
     width, height = 7, 6
     wincondition = 4
-    blindfolded = False
+    blindfolded, preset_moves = False, 0
+
+    # ensure preset_moves flag is located after boardsize flag
+    for flagnum, flag in enumerate(flags):
+        if flag[0] in map(str, [i for i in range(1, width+1)]) and flag[1] != 'x':
+            flags = flags[:flagnum] + flags[flagnum+1:] + (flags[flagnum],)
+            break
 
     try:
         for flag in flags:
@@ -348,8 +357,6 @@ async def start(ctx, *flags):
             if flag[1] == "x":
                 width, height = int(flag[0]), int(flag[2:])
                 if (width > 9 or height > 9) or (width < 2 or height < 2): raise Exception
-            
-            #if flag.startswith("board"): # set custom starting position
 
             elif flag.startswith("wincondition=") or flag.startswith("wc="):
                 wincondition = int(flag[flag.index("=")+1:])
@@ -358,9 +365,20 @@ async def start(ctx, *flags):
             
             elif flag == "blindfolded" or flag == "bf":
                 blindfolded = True
-            
+
+            # this condition must be last because it assumes int. here you set starting position ('436')
             else:
-                raise Exception
+                characters = {char for char in flag}
+                legalcharacters = {str(i) for i in range(1, width+1)}
+                if not characters - legalcharacters: # i.e make sure only valid characters are used
+                    preset_moves = flag
+                    for char in characters:
+                        if preset_moves.count(char) > height:
+                            raise Exception
+                
+
+                else:
+                    raise Exception
 
     except:
         await ctx.send(f"Invalid flag format. Issue here → `{currentflag}`")
@@ -371,7 +389,6 @@ async def start(ctx, *flags):
     if gameRunning:
         player1 = ctx.author
         await ctx.send(player1.mention + " has started a game. Type '-join' to join")
-
         while True:
             # await a second player joining
             try:
@@ -395,22 +412,32 @@ async def start(ctx, *flags):
             if msg.content != "-join": # ignore any messages that arent joining
                 continue
 
-            if (msg.author, msg.channel) in activeGamePlayers:
-                await ctx.send(player2.mention + " is already playing a game")
+            if (msg.author, msg.channel) in activeGamePlayers and 0:
+                await ctx.send(player2.mention + " is already playing a game in this channel")
                 continue
 
-            await ctx.send(player2.mention + " has joined the game, now starting")
+            #await ctx.send(player2.mention + " has joined the game, now starting")
             activeGamePlayers.append((msg.author, msg.channel))
 
             # board initializing
+
             board = [[":white_large_square:"]*width for i in range(height)]
             bottomCell = [height-1 for cols in range(width)]
             moves = ""
 
             if blindfolded:
                 board = 0
+            if preset_moves:
+                preset_moves
+                moves = str(preset_moves)
+                turn = bool(~len(moves)%2)
+                boardSize = str(width) + "x" + str(height)
+                board = getBoard(moves, boardSize)
                 
-            await ctx.send(getBoardMessage(board, player1.mention, player2.mention, turn))
+                for move in moves:
+                    bottomCell[int(move)-1] -= 1
+                
+            await ctx.send(getBoardMessage(board, player1, player2, turn))
             break
     
     while gameRunning:
@@ -458,11 +485,11 @@ async def start(ctx, *flags):
             gameRunning = False
             activeGamePlayers.remove((player1, ctx.channel))
             activeGamePlayers.remove((player2, ctx.channel))
-            await ctx.send(getBoardMessage(board, player1.mention, player2.mention, turn))
+            await ctx.send(getBoardMessage(board, player1, player2, turn))
             return await ctx.send(msg.author.mention + " won the game!")
             
         turn = not turn
-        await ctx.send(getBoardMessage(board, player1.mention, player2.mention, turn))
+        await ctx.send(getBoardMessage(board, player1, player2, turn))
 
 
 
